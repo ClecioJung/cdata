@@ -62,18 +62,17 @@
 #define array_is_not_empty(array)               (array_size(array) > 0)
 #define array_at(array, index)                  ((array)[(index)])
 #define array_last(array)                       (array_at((array),(array_size(array) - 1)))
+
+// Remove element at the end of the array
 #define array_pop(array)                        (array_at((array),(--array_size(array))))
 
+// Insert element at the end of the array
 #define array_push(array, value) \
-    do { \
-        array_size(array)++; \
-        (array) = (array_size(array) >= array_capacity(array)) ? array_resize((array), 2*array_capacity(array)) : (array); \
-        if ((array) != NULL) { \
-            array_last(array) = (value); \
-        } \
-    } while (0)
+    (((array) = (++array_size(array) >= array_capacity(array)) ? array_resize((array), 2*array_capacity(array)) : (array)), \
+    (array_last(array) = (value)))
 
-// Remove element from the beginning
+
+// Remove element from the beginning of the array (nothing is returned)
 #define array_shift(array) \
     do { \
         if (array_is_not_empty(array)) { \
@@ -82,17 +81,14 @@
         } \
     } while (0)
 
-// Insert element in the beginning
-#define array_unshift(array, value) \
-    do { \
-        array_size(array)++; \
-        (array) = (array_size(array) >= array_capacity(array)) ? array_resize((array), 2*array_capacity(array)) : (array); \
-        if ((array) != NULL) { \
-            memmove(&array_at((array) ,1), (array), (array_size(array) - 1)*sizeof(*(array))); \
-            array_at(array, 0) = (value); \
-        } \
-    } while (0)
 
+// Insert element in the beginning of the array
+#define array_unshift(array, value) \
+    (((array) = (++array_size(array) >= array_capacity(array)) ? array_resize((array), 2*array_capacity(array)) : (array)), \
+    memmove(&array_at((array) ,1), (array), (array_size(array) - 1)*sizeof(*(array))), \
+    array_at(array, 0) = (value))
+
+// Insert element at a specified position in the array (nothing is returned)
 #define array_insert_at(array, index, value) \
     do { \
         size_t new_size = array_index_is_valid((array), (index)) ? (array_size(array)+1) : ((index)+1); \
@@ -113,6 +109,7 @@
         } \
     } while (0)
 
+// Remove element at a specified position in the array (nothing is returned)
 #define array_remove_at(array, index) \
     do { \
         if (array_index_is_valid((array), (index))) { \

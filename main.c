@@ -120,8 +120,6 @@ void sorted_algorithm(Word **array, const char *const word, const size_t word_le
             .word = strndup(word, word_len),
             .count = 1,
         };
-        /*array_push(*array, new_word);
-        qsort(*array, array_size(*array), sizeof((*array)[0]), compare_words);*/
         array_insert_at(*array, index, new_word);
     }
 }
