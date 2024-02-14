@@ -1,5 +1,7 @@
 CC            = gcc
-CFLAGS        = -pedantic -Wall -Wextra -Werror -std=c99
+CFLAGS        = -pedantic -W -Wall -Wextra \
+                -Wconversion -Wswitch-enum \
+                -Werror -std=c99
 DEBUG_FLAGS   = -O0 -g -DDEBUG
 RELEASE_FLAGS = -O2 -flto
 EXEC          = count

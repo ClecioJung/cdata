@@ -56,12 +56,14 @@
 #define array_clear(array)  (array_size(array) = 0)
 #define array_delete(array) (free((void *)((char *)(array) - HEADER_SIZE)))
 
-#define array_index_is_valid(array, index)      ((index) < array_size(array))
-#define array_index_is_invalid(array, index)    ((index) >= array_size(array))
+#define array_index_is_valid(array,index)       ((index) < array_size(array))
+#define array_index_is_invalid(array,index)     ((index) >= array_size(array))
 #define array_is_empty(array)                   (array_size(array) == 0)
 #define array_is_not_empty(array)               (array_size(array) > 0)
 #define array_at(array, index)                  ((array)[(index)])
 #define array_last(array)                       (array_at((array),(array_size(array) - 1)))
+#define array_for(array,index)                  for (size_t (index) = 0; (index) < array_size(array); (index)++)
+#define array_for_each(array,it)                for (__typeof__(array) (it) = (array); (it) <= &array_last(array); (it)++)
 
 // Remove element at the end of the array
 #define array_pop(array)                        (array_at((array),(--array_size(array))))
@@ -118,10 +120,26 @@
         } \
     } while (0)
 
+// Compare function type used for sorting and searching functions
+typedef int (*Compare_Fcn)(const void *, const void *);
+
+#define array_sequential_search(array,key,compare) \
+    _array_sequential_search((array), sizeof(*(array)), (key), (compare)) 
+#define array_binary_search(array,key,compare) \
+    _array_binary_search((array), sizeof(*(array)), (key), (compare))
+#define array_qsort(array,compare) \
+    qsort((array), array_size(array), sizeof(*array), (compare))
+
 // Function prototypes
 // This functions shouldn't be called directly, insted use the macros defined above
-void *_array_new(size_t element_size, size_t initial_capacity) __attribute__((warn_unused_result));
-void *_array_resize(void *array, size_t element_size, size_t new_capacity) __attribute__((warn_unused_result));
+void *_array_new(size_t element_size, size_t initial_capacity)
+    __attribute__((warn_unused_result));
+void *_array_resize(void *array, size_t element_size, size_t new_capacity)
+    __attribute__((warn_unused_result));
+size_t _array_sequential_search(const void *array, size_t element_size, const void *key, Compare_Fcn compare)
+    __attribute__((warn_unused_result));
+size_t _array_binary_search(const void *array, size_t element_size, const void *key, Compare_Fcn compare)
+    __attribute__((warn_unused_result));
 
 #endif  // __DYNAMIC_ARRAY
 
@@ -154,6 +172,41 @@ void *_array_resize(void *array, size_t element_size, size_t new_capacity) {
     void *new_array = (char *)new_p + HEADER_SIZE;
     array_capacity(new_array) = new_capacity;
     return(new_array);
+}
+
+// This function shouldn't be called directly, insted use the macro array_sequential_search
+// It returns an invalid index in case the key wasn't found
+size_t _array_sequential_search(const void *array, size_t element_size, const void *key, Compare_Fcn compare) {
+    for (size_t i = 0; i < array_size(array); i++) {
+        const void *it = (void *)((size_t)array + i*element_size);
+        if (!compare(key, it)) {
+            return i;
+        }
+    }
+    return (size_t)-1;
+}
+
+// This function shouldn't be called directly, insted use the macro array_binary_search
+// It returns an invalid index in case the key wasn't found
+size_t _array_binary_search(const void *array, size_t element_size, const void *key, Compare_Fcn compare) {
+    size_t index;
+    size_t low = 0;
+    size_t high = array_size(array) - 1;
+    while ((low <= high) && array_index_is_valid(array, high)) {
+        index = low + (high - low) / 2; // middle
+        const void *it = (void *)((size_t)array + index*element_size);
+        const int comp = compare(key, it);
+        if (comp < 0) {
+            high = index - 1;
+        } else if (comp > 0) {
+            low = index + 1;
+        } else {
+            return index;
+        }
+    }
+    // Didn't found the key
+    index = (size_t)-1*(low+1);
+    return index;
 }
 
 #endif // DYNAMIC_ARRAY_IMPLEMENTATION

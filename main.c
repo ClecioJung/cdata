@@ -16,7 +16,7 @@ typedef struct {
     size_t count;
 } Word;
 
-typedef void (*Process_Word_Fcn)(Word **, const char *const, const size_t);
+typedef void (*Process_Word_Fcn)(Word **, const Word);
 typedef void (*Post_Process_Words)(Word *const);
 typedef struct {
     char *name;
@@ -38,86 +38,34 @@ int compare_words(const void *a, const void *b) {
 int compare_words_by_count(const void *a, const void *b) {
     Word *word_a = (Word *)a;
     Word *word_b = (Word *)b;
-    return (word_b->count - word_a->count);
+    return ((int)word_b->count - (int)word_a->count);
 }
 
 void sort_words_descending_by_count(Word *const array) {
-    qsort(array, array_size(array), sizeof(array[0]), compare_words_by_count);
+    array_qsort(array, compare_words_by_count);
 }
 
-int compare_sized_str_to_word(const char *const str, const size_t str_len, const char *const word) {
-    const size_t word_len = strlen(word);
-    const size_t min_len = MIN(word_len, str_len);
-    const int comp = strncmp(str, word, min_len);
-    if (!comp) {
-        return ((int)str_len - (int)word_len);
-    }
-    return comp;
-}
-
-size_t sequential_search(const Word *const array, const char *const word, const size_t word_len) {
-    for (size_t i = 0; i < array_size(array); i++) {
-        if (!compare_sized_str_to_word(word, word_len, array[i].word)) {
-            return i;
-        }
-    }
-    return (size_t)-1;
-}
-
-// This function returns non-zero if found the variable in the array and index
-// stores the corresponding position in the array.
-// Otherwise, the index points to position for the element to be inserted keeping the array sorted.
-int binary_search(const Word *const array, const char *const word, const size_t word_len, size_t *const index) {
-    size_t low = 0;
-    size_t high = array_size(array) - 1;
-    while ((low <= high) && array_index_is_valid(array, high)) {
-        *index = low + (high - low) / 2; // middle
-        const int comp = compare_sized_str_to_word(word, word_len, array[*index].word);
-        if (comp < 0) {
-            high = *index - 1;
-        } else if (comp > 0) {
-            low = *index + 1;
-        } else {
-            return 1;
-        }
-    }
-    *index = low;
-    return 0;
-    
-    /*
-    char buffer[4096];
-    assert(word_len < sizeof(buffer));
-    strncpy(buffer, word, word_len);
-    buffer[word_len] = '\0';
-    const Word key = { .word = buffer };
-    const Word *const found = bsearch(&key, array, array_size(array), sizeof(array[0]), compare_words);
-    if (found == NULL) {
-        return (size_t)-1;
-    }
-    return (found - array);
-    */
-}
-
-void sequential_algorithm(Word **array, const char *const word, const size_t word_len) {
-    const size_t index = sequential_search(*array, word, word_len);
+void sequential_algorithm(Word **array, const Word word) {
+    const size_t index = array_sequential_search(*array, &word, compare_words);
     if (array_index_is_valid(*array, index)) {
         array_at(*array, index).count++;
     } else {
         Word new_word = {
-            .word = strndup(word, word_len),
+            .word = strdup(word.word),
             .count = 1,
         };
         array_push(*array, new_word);
     }
 }
 
-void sorted_algorithm(Word **array, const char *const word, const size_t word_len) {
-    size_t index = 0;
-    if (binary_search(*array, word, word_len, &index)) {
+void sorted_algorithm(Word **array, const Word word) {
+    size_t index = array_binary_search(*array, &word, compare_words);
+    if (array_index_is_valid(*array, index)) {
         array_at(*array, index).count++;
     } else {
+        index = (size_t)(-1L*(long)index - 1);
         Word new_word = {
-            .word = strndup(word, word_len),
+            .word = strdup(word.word),
             .count = 1,
         };
         array_insert_at(*array, index, new_word);
@@ -136,6 +84,7 @@ int process_file(const char *const filename, const Algorithm algorithm) {
         fprintf(stderr, "Could not open file %s: %s\n", filename, strerror(errno));
         return EXIT_FAILURE;
     }
+    char tmp_buffer[4096];
     char buffer[4096];
     Word *array = array_new(Word);
     size_t lines = 0, chars = 0, words = 0;
@@ -152,7 +101,11 @@ int process_file(const char *const filename, const Algorithm algorithm) {
             }
             if (word_len > 0) {
                 words++;
-                algorithm.process_word(&array, str, word_len);
+                assert(word_len < sizeof(tmp_buffer));
+                strncpy(tmp_buffer, str, word_len);
+                tmp_buffer[word_len] = '\0';
+                Word word_found = { .word = tmp_buffer };
+                algorithm.process_word(&array, word_found);
             }
             str += word_len;
         }
@@ -181,8 +134,8 @@ int process_file(const char *const filename, const Algorithm algorithm) {
             }
         }
     }
-    for (size_t i = 0; i < array_size(array); i++) {
-        free(array[i].word);
+    array_for_each(array, it) {
+        free(it->word);
     }
     array_delete(array);
     fclose(file);
@@ -208,7 +161,6 @@ int main(const int argc, const char *const argv[])
                 return EXIT_FAILURE;
             }
         }
-        
     }
     return EXIT_SUCCESS;
 }
