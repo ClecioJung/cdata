@@ -59,16 +59,14 @@ void sequential_algorithm(Word **array, const Word word) {
 }
 
 void sorted_algorithm(Word **array, const Word word) {
-    size_t index = array_binary_search(*array, &word, compare_words);
-    if (array_index_is_valid(*array, index)) {
-        array_at(*array, index).count++;
-    } else {
-        index = (size_t)(-1L*(long)index - 1);
-        Word new_word = {
+    size_t index;
+    if (array_insert_sorted(*array, &word, compare_words, &index)) {
+        array_at(*array, index) = (Word) {
             .word = strdup(word.word),
             .count = 1,
         };
-        array_insert_at(*array, index, new_word);
+    } else {
+        array_at(*array, index).count++;
     }
 }
 
