@@ -14,20 +14,50 @@
 typedef struct {
     char *word;
     size_t count;
+    // TODO: Remove this - simple hack used to implement simple hash table
+    int occupied;
 } Word;
 
-typedef void (*Process_Word_Fcn)(Word **, const Word);
-typedef void (*Post_Process_Words)(Word *const);
+typedef void *(*Init_Fcn)(void);
+typedef void (*Process_Word_Fcn)(void **, const Word);
+typedef void (*Post_Process_Fcn)(void *const);
+typedef void (*Display_Results_Fcn)(void *const);
+typedef void (*Deinit_Fcn)(void *);
+
 typedef struct {
     char *name;
+    Init_Fcn init;
     Process_Word_Fcn process_word;
-    Post_Process_Words post_process;
+    Post_Process_Fcn post_process;
+    Display_Results_Fcn display_results;
+    Deinit_Fcn deinit;
 } Algorithm;
-
-#define ARRAY_LEN(array) (sizeof(array)/sizeof(array[0]))
 
 #define MIN(a,b) ((a)<(b)?(a):(b))
 #define MAX(a,b) ((a)>(b)?(a):(b))
+
+void *array_init(void) {
+    Word *array = array_new(Word);
+    return array;
+}
+
+void array_deinit(void *data) {
+    Word *array = data;
+    array_for_each(array, it) {
+        free(it->word);
+    }
+    array_delete(array);
+}
+
+void hash_table_deinit(void *data) {
+    Word *array = data;
+    for (size_t i = 0; i < array_capacity(array); i++) {
+        if (array[i].occupied) {
+            free(array[i].word);
+        }
+    }
+    array_delete(array);
+}
 
 int compare_words(const void *a, const void *b) {
     Word *word_a = (Word *)a;
@@ -41,11 +71,25 @@ int compare_words_by_count(const void *a, const void *b) {
     return ((int)word_b->count - (int)word_a->count);
 }
 
-void sort_words_descending_by_count(Word *const array) {
+void array_sort_words_descending_by_count(void *const data) {
+    Word *const array = data;
     array_qsort(array, compare_words_by_count);
 }
 
-void sequential_algorithm(Word **array, const Word word) {
+void array_display_results(void *const data) {
+    Word *const array = data;
+    printf("  unique words: %zu\n", array_size(array));
+    const size_t number_of_words = MIN(10, array_size(array));
+    if (number_of_words > 0) {
+        printf("  top %zu words:\n", number_of_words);
+        for (size_t i = 0; i < number_of_words; i++) {
+            printf("    %02zu. %-15s %6zu\n", (i+1), array[i].word, array[i].count);
+        }
+    }
+}
+
+void sequential_algorithm(void **data, const Word word) {
+    Word **array = (Word **)data;
     const size_t index = array_sequential_search(*array, &word, compare_words);
     if (array_index_is_valid(*array, index)) {
         array_at(*array, index).count++;
@@ -58,7 +102,8 @@ void sequential_algorithm(Word **array, const Word word) {
     }
 }
 
-void sorted_algorithm(Word **array, const Word word) {
+void sorted_algorithm(void **data, const Word word) {
+    Word **array = (Word **)data;
     size_t index;
     if (array_insert_sorted(*array, &word, compare_words, &index)) {
         array_at(*array, index) = (Word) {
@@ -70,9 +115,63 @@ void sorted_algorithm(Word **array, const Word word) {
     }
 }
 
+unsigned int djb2(const char *str) {
+    unsigned int hash = 5381;
+    for (; *str; ++str) {
+        /* hash * 33 + c */
+        hash = ((hash << 5) + hash) + (unsigned int)*str;
+    }
+    return hash;
+}
+
+void hash_algorithm(void **data, const Word word) {
+    Word **array = (Word **)data;
+    size_t index = djb2(word.word) % array_capacity(*array);
+    size_t i = 0;
+    for (; i < array_capacity(*array) && 
+        (array_at(*array, index).occupied &&
+        strcmp(word.word, array_at(*array, index).word) != 0);
+        i++) {
+        index = (index + 1) % array_capacity(*array);
+    }
+    assert(i < array_capacity(*array)); // TODO: Review this
+    if (array_at(*array, index).occupied) {
+        array_at(*array, index).count++;
+    } else {
+        array_at(*array, index) = (Word) {
+            .word = strdup(word.word),
+            .count = 1,
+            .occupied = 1,
+        };
+        array_size(*array)++;
+    }
+}
+
 static const Algorithm algorithms[] = {
-    {.name = "sequential", .process_word = sequential_algorithm, .post_process = sort_words_descending_by_count, },
-    {.name = "sorted", .process_word = sorted_algorithm, .post_process = sort_words_descending_by_count, },
+    {
+        .name = "dynamic array",
+        .init = array_init,
+        .process_word = sequential_algorithm,
+        .post_process = array_sort_words_descending_by_count,
+        .display_results = array_display_results,
+        .deinit = array_deinit,
+    },
+    {
+        .name = "sorted dynamic array",
+        .init = array_init,
+        .process_word = sorted_algorithm,
+        .post_process = array_sort_words_descending_by_count,
+        .display_results = array_display_results,
+        .deinit = array_deinit,
+    },
+    { // TODO: implement generic hash table
+        .name = "hash table",
+        .init = array_init,
+        .process_word = hash_algorithm,
+        .post_process = array_sort_words_descending_by_count,
+        .display_results = array_display_results,
+        .deinit = hash_table_deinit,
+    },
 };
 
 int process_file(const char *const filename, const Algorithm algorithm) {
@@ -84,7 +183,7 @@ int process_file(const char *const filename, const Algorithm algorithm) {
     }
     char tmp_buffer[4096];
     char buffer[4096];
-    Word *array = array_new(Word);
+    void *data = algorithm.init();
     size_t lines = 0, chars = 0, words = 0;
     while (fgets(buffer, sizeof(buffer), file) != NULL) {
         char *str = buffer;
@@ -103,7 +202,7 @@ int process_file(const char *const filename, const Algorithm algorithm) {
                 strncpy(tmp_buffer, str, word_len);
                 tmp_buffer[word_len] = '\0';
                 Word word_found = { .word = tmp_buffer };
-                algorithm.process_word(&array, word_found);
+                algorithm.process_word(&data, word_found);
             }
             str += word_len;
         }
@@ -114,7 +213,7 @@ int process_file(const char *const filename, const Algorithm algorithm) {
         fprintf(stderr, "Didn't reach the end of file for %s\n", filename);
         result = EXIT_FAILURE;
     }
-    algorithm.post_process(array);
+    algorithm.post_process(data);
     clock_t toc = clock();
     if (result == EXIT_SUCCESS) {
         printf("File: %s\n", filename);
@@ -123,19 +222,9 @@ int process_file(const char *const filename, const Algorithm algorithm) {
         printf("  lines: %zu\n", lines);
         printf("  chars: %zu\n", chars);
         printf("  words: %zu\n", words);
-        printf("  unique words: %zu\n", array_size(array));
-        const size_t number_of_words = MIN(10, array_size(array));
-        if (number_of_words > 0) {
-            printf("  top %zu words:\n", number_of_words);
-            for (size_t i = 0; i < number_of_words; i++) {
-                printf("    %02zu. %-15s %6zu\n", (i+1), array[i].word, array[i].count);
-            }
-        }
+        algorithm.display_results(data);
     }
-    array_for_each(array, it) {
-        free(it->word);
-    }
-    array_delete(array);
+    algorithm.deinit(data);
     fclose(file);
     return result;
 }
@@ -154,7 +243,7 @@ int main(const int argc, const char *const argv[])
     }
     for (int i = 1; i < argc; i++) {
         const char *const filename = argv[i];
-        for (size_t j = 0; j < ARRAY_LEN(algorithms); j++) {
+        for (size_t j = 0; j < STATIC_ARRAY_LEN(algorithms); j++) {
             if (process_file(filename, algorithms[j])) {
                 return EXIT_FAILURE;
             }

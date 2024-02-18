@@ -38,27 +38,29 @@
 // Be carefull, this implementation uses a lot of macros, and therefore,
 // is not entirely type safe
 
-#define HEADER_SIZE                 (2*sizeof(size_t))
+#define STATIC_ARRAY_LEN(array)     (sizeof(array)/sizeof(array[0]))
 
-#define DEFAULT_INITIAL_CAPACITY    (512)
+#define ARRAY_HEADER_SIZE           (2*sizeof(size_t))
+
+#define ARRAY_DEFAULT_CAPACITY      (10000) // TODO: return to default 512
 
 #define array_size(array)           ((size_t *)(array))[-1]
 #define array_capacity(array)       ((size_t *)(array))[-2]
 
 #define array_new_with_capacity(type,initial_capacity) \
     _array_new(sizeof(type), (initial_capacity))
-#define array_resize(array, new_capacity) \
+#define array_resize(array,new_capacity) \
     _array_resize((array), sizeof(*(array)), (new_capacity))
 
-#define array_new(type)     array_new_with_capacity(type, DEFAULT_INITIAL_CAPACITY)
+#define array_new(type)     array_new_with_capacity(type, ARRAY_DEFAULT_CAPACITY)
 #define array_clear(array)  (array_size(array) = 0)
-#define array_delete(array) (free((void *)((char *)(array) - HEADER_SIZE)))
+#define array_delete(array) (free((void *)((char *)(array) - ARRAY_HEADER_SIZE)))
 
 #define array_index_is_valid(array,index)       ((index) < array_size(array))
 #define array_index_is_invalid(array,index)     ((index) >= array_size(array))
 #define array_is_empty(array)                   (array_size(array) == 0)
 #define array_is_not_empty(array)               (array_size(array) > 0)
-#define array_at(array, index)                  ((array)[(index)])
+#define array_at(array,index)                   ((array)[(index)])
 #define array_last(array)                       (array_at((array),(array_size(array) - 1)))
 #define array_for(array,index)                  for (size_t (index) = 0; (index) < array_size(array); (index)++)
 #define array_for_each(array,it)                for (__typeof__(array) (it) = (array); (it) <= &array_last(array); (it)++)
@@ -147,11 +149,12 @@ size_t _array_binary_search(const void *array, size_t element_size, const void *
 
 // This function shouldn't be called directly, insted use the macros array_new or array_new_with_capacity
 void *_array_new(size_t element_size, size_t initial_capacity) {
-    void *p = malloc(initial_capacity * element_size + HEADER_SIZE);
+    void *p = malloc(initial_capacity * element_size + ARRAY_HEADER_SIZE);
     if (p == NULL) {
         return(NULL);
     }
-    void *array = (char *)p + HEADER_SIZE;
+    memset(p, 0, initial_capacity * element_size + ARRAY_HEADER_SIZE);
+    void *array = (char *)p + ARRAY_HEADER_SIZE;
     array_size(array) = 0;
     array_capacity(array) = initial_capacity;
     return(array);
@@ -159,13 +162,16 @@ void *_array_new(size_t element_size, size_t initial_capacity) {
 
 // This function shouldn't be called directly, insted use the macro array_resize
 void *_array_resize(void *array, size_t element_size, size_t new_capacity) {
-    void *p = ((char *)array - HEADER_SIZE);
-    void *new_p = realloc(p, new_capacity * element_size + HEADER_SIZE);
+    void *p = ((char *)array - ARRAY_HEADER_SIZE);
+    void *new_p = realloc(p, new_capacity * element_size + ARRAY_HEADER_SIZE);
     if (new_p == NULL) {
         free(p);
         return(NULL);
     }
-    void *new_array = (char *)new_p + HEADER_SIZE;
+    void *new_array = (char *)new_p + ARRAY_HEADER_SIZE;
+    void *address = array_compute_address_at(array, element_size, array_capacity(array));
+    size_t length = (new_capacity - array_capacity(new_array));
+    memset(address, 0, length * element_size);
     array_capacity(new_array) = new_capacity;
     return(new_array);
 }
@@ -179,11 +185,6 @@ void *_array_insert_zero_at(void *array, size_t element_size, size_t index) {
             new_capacity *= 2;
         }
         array = _array_resize(array, element_size, new_capacity);
-        if (array != NULL) {
-            void *end = array_compute_address_at(array, element_size, array_size(array));
-            size_t length = (new_size - (array_size(array)+1));
-            memset(end, 0, length*element_size);
-        }
     }
     if (array != NULL) {
         void *actual = array_compute_address_at(array, element_size, index);
@@ -195,7 +196,7 @@ void *_array_insert_zero_at(void *array, size_t element_size, size_t index) {
         memset(actual, 0, element_size);
         array_size(array) = new_size;
     }
-    return array;
+    return(array);
 }
 
 // This function shouldn't be called directly, insted use the macro array_sequential_search
@@ -204,10 +205,10 @@ size_t _array_sequential_search(const void *array, size_t element_size, const vo
     for (size_t i = 0; i < array_size(array); i++) {
         const void *it = array_compute_address_at(array, element_size, i);
         if (!compare(key, it)) {
-            return i;
+            return(i);
         }
     }
-    return (size_t)-1;
+    return((size_t)-1);
 }
 
 // This function shouldn't be called directly, insted use the macro array_binary_search
@@ -225,14 +226,14 @@ size_t _array_binary_search(const void *array, size_t element_size, const void *
         } else if (comp > 0) {
             low = index + 1;
         } else {
-            return index;
+            return(index);
         }
     }
     // Didn't found the key
     // Return an invalid index, but with enought information so that _array_insert_sorted
     // can recover the ideal position for the element to be inserted
     index = (size_t)-1*(low+1);
-    return index;
+    return(index);
 }
 
 // This function shouldn't be called directly, insted use the macro array_insert_sorted
@@ -243,7 +244,7 @@ int _array_insert_sorted(void **array, size_t element_size, const void *element,
         if (user_index != NULL) {
             *user_index = index;
         }
-        return 0;
+        return(0);
     }
     // Insert new element
     index = (size_t)(-1L*(long)index - 1);
@@ -253,7 +254,7 @@ int _array_insert_sorted(void **array, size_t element_size, const void *element,
     if (user_index != NULL) {
         *user_index = index;
     }
-    return 1;
+    return(1);
 }
 
 #endif // DYNAMIC_ARRAY_IMPLEMENTATION
