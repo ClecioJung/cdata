@@ -38,6 +38,41 @@
 // Be carefull, this implementation uses a lot of macros, and therefore,
 // is not entirely type safe
 
+/*** Configuration ***/
+
+#ifndef GROWTH_FACTOR
+#define GROWTH_FACTOR               (2)
+#endif
+#if (GROWTH_FACTOR <= 1)
+#error "The GROWTH_FACTOR should be greater than one!"
+#endif
+
+#ifndef DEFAULT_CAPACITY
+#define DEFAULT_CAPACITY            (512)
+#endif
+#if (DEFAULT_CAPACITY <= 1)
+#error "The DEFAULT_CAPACITY should be greater than one!"
+#endif
+
+#ifndef LOAD_FACTOR_NUMERATOR
+#define LOAD_FACTOR_NUMERATOR       (1)
+#endif
+#ifndef LOAD_FACTOR_DENOMINATOR
+#define LOAD_FACTOR_DENOMINATOR     (2)
+#endif
+#if (LOAD_FACTOR_NUMERATOR <= 0)
+#error "The LOAD_FACTOR_NUMERATOR should be greater than zero!"
+#endif
+#if (LOAD_FACTOR_DENOMINATOR <= 0)
+#error "The LOAD_FACTOR_DENOMINATOR should be greater than zero!"
+#endif
+#if (LOAD_FACTOR_NUMERATOR >= LOAD_FACTOR_DENOMINATOR)
+#error "The load factor (LOAD_FACTOR_NUMERATOR/LOAD_FACTOR_DENOMINATOR) should be lower than one!"
+#endif
+
+
+/*** General functions ***/
+
 #define STATIC_ARRAY_LEN(array)     (sizeof(array)/sizeof(array[0]))
 
 #define INT_DIV_ROUND_UP(num,den)   (((num) + (den) - 1)/(den))
@@ -47,9 +82,10 @@
 #define CLEAR_BIT(value,bit)        ((value) &= (~(1L << (bit))))
 #define TOOGLE_BIT(value,bit)       ((value) ^  (1L << (bit)))
 
-#define ARRAY_HEADER_SIZE           (2*sizeof(size_t))
 
-#define ARRAY_DEFAULT_CAPACITY      (512)
+/*** Dynamic array ***/
+
+#define ARRAY_HEADER_SIZE           (2*sizeof(size_t))
 
 #define array_size(array)           ((size_t *)(array))[-1]
 #define array_capacity(array)       ((size_t *)(array))[-2]
@@ -59,7 +95,7 @@
 #define array_resize(array,new_capacity) \
     _array_resize((array), sizeof(*(array)), (new_capacity))
 
-#define array_new(type)     array_new_with_capacity(type, ARRAY_DEFAULT_CAPACITY)
+#define array_new(type)     array_new_with_capacity(type, DEFAULT_CAPACITY)
 #define array_clear(array)  (array_size(array) = 0)
 #define array_delete(array) (free((void *)((char *)(array) - ARRAY_HEADER_SIZE)))
 
@@ -77,12 +113,12 @@
 
 // Insert element at the end of the array
 #define array_push(array,value) \
-    (((array) = (++array_size(array) >= array_capacity(array)) ? array_resize((array), 2*array_capacity(array)) : (array)), \
+    (((array) = (++array_size(array) >= array_capacity(array)) ? array_resize((array), GROWTH_FACTOR*array_capacity(array)) : (array)), \
     (array_last(array) = (value)))
 
 #define array_push_raw(array,value,element_size) \
     do { \
-        (array) = (++array_size(array) >= array_capacity(array)) ? _array_resize((array), element_size, 2*array_capacity(array)) : (array); \
+        (array) = (++array_size(array) >= array_capacity(array)) ? _array_resize((array), element_size, GROWTH_FACTOR*array_capacity(array)) : (array); \
         memcpy(array_compute_address_at((array), (element_size), array_size(array)-1), (value), element_size); \
     } while (0)
 
@@ -98,7 +134,7 @@
 
 // Insert element in the beginning of the array
 #define array_unshift(array, value) \
-    (((array) = (++array_size(array) >= array_capacity(array)) ? array_resize((array), 2*array_capacity(array)) : (array)), \
+    (((array) = (++array_size(array) >= array_capacity(array)) ? array_resize((array), GROWTH_FACTOR*array_capacity(array)) : (array)), \
     memmove(&array_at((array) ,1), (array), (array_size(array) - 1)*sizeof(*(array))), \
     array_at(array, 0) = (value))
 
@@ -140,7 +176,7 @@ typedef int (*Compare_Fcn)(const void *, const void *);
     ((void *)((size_t)(array) + (index)*(element_size)))
 
 
-/*** Hash Table ***/
+/*** Hash Table using open adressing and linear probing ***/
 
 typedef size_t (*Hash_Fcn)(const void *);
 
@@ -165,9 +201,12 @@ typedef size_t (*Hash_Fcn)(const void *);
 #define hash_table_new_with_capacity(type,hash_function,compare_key,initial_capacity) \
     (type *)_hash_table_new(sizeof(type), (hash_function), (compare_key), (initial_capacity))
 #define hash_table_new(type,hash_function,compare_key) \
-    hash_table_new_with_capacity(type, (hash_function), (compare_key), ARRAY_DEFAULT_CAPACITY)
+    hash_table_new_with_capacity(type, (hash_function), (compare_key), DEFAULT_CAPACITY)
 #define hash_table_delete(hash_table) \
     (free((void *)hash_table_occupied_pointer(hash_table)))
+
+#define hash_table_should_resize(hash_table) \
+    (LOAD_FACTOR_DENOMINATOR*hash_table_size(hash_table) >= LOAD_FACTOR_NUMERATOR*hash_table_capacity(hash_table))
 
 #define hash_table_hash_function(hash_table) \
     (*(Hash_Fcn *)((size_t)(hash_table) - ARRAY_HEADER_SIZE - sizeof(Hash_Fcn)))
@@ -231,8 +270,7 @@ void *_array_new(size_t element_size, size_t header_size, size_t initial_capacit
     if (p == NULL) {
         return(NULL);
     }
-    //memset(p, 0, initial_capacity * element_size + header_size);
-    memset(p, 0, header_size);
+    memset(p, 0, initial_capacity * element_size + header_size);
     void *array = (char *)p + header_size;
     array_size(array) = 0;
     array_capacity(array) = initial_capacity;
@@ -262,7 +300,7 @@ void *_array_insert_zero_at(void *array, size_t element_size, size_t index) {
     if (new_size >= array_capacity(array)) {
         size_t new_capacity = array_capacity(array);
         while (new_size >= new_capacity) {
-            new_capacity *= 2;
+            new_capacity *= GROWTH_FACTOR;
         }
         array = _array_resize(array, element_size, new_capacity);
     }
@@ -386,7 +424,7 @@ static void *_hash_table_resize(void *hash_table, size_t element_size) {
     void *new_hash_table = _hash_table_new(element_size,
         hash_table_hash_function(hash_table),
         hash_table_compare_function(hash_table),
-        2*hash_table_capacity(hash_table));
+        GROWTH_FACTOR*hash_table_capacity(hash_table));
     if (new_hash_table == NULL) {
         return(NULL);
     }
@@ -407,7 +445,7 @@ static void *_hash_table_resize(void *hash_table, size_t element_size) {
 }
 
 int _hash_table_insert(void **hash_table, size_t element_size, const void *value, void **const user_address) {
-    if (hash_table_size(*hash_table) + 1 >= hash_table_capacity(*hash_table)) {
+    if (hash_table_should_resize(*hash_table)) {
         *hash_table = _hash_table_resize(*hash_table, element_size);
         if (*hash_table == NULL) {
             return(-1);
