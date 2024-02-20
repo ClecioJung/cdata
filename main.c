@@ -8,8 +8,8 @@
 #include <string.h>
 #include <time.h>
 
-#define DYNAMIC_ARRAY_IMPLEMENTATION
-#include "dynamic_array.h"
+#define CDATA_IMPLEMENTATION
+#include "cdata.h"
 
 typedef struct {
     char *word;

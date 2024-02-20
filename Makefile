@@ -21,10 +21,10 @@ release: $(RELEASE_EXEC)
 
 debug: $(DEBUG_EXEC)
 
-$(RELEASE_EXEC): main.c dynamic_array.h Makefile | $(RELEASE_DIR)
+$(RELEASE_EXEC): main.c cdata.h Makefile | $(RELEASE_DIR)
 	$(CC) $(CFLAGS) $(RELEASE_FLAGS) $(filter %.c %.o %.s,$^) -o $@
 
-$(DEBUG_EXEC): main.c dynamic_array.h Makefile | $(DEBUG_DIR)
+$(DEBUG_EXEC): main.c cdata.h Makefile | $(DEBUG_DIR)
 	$(CC) $(CFLAGS) $(DEBUG_FLAGS) $(filter %.c %.o %.s,$^) -o $@
 
 $(RELEASE_DIR) $(DEBUG_DIR):
