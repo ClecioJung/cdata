@@ -36,7 +36,7 @@
 // This file is a header only library. In order to include it's implementation,
 // define the macro CDATA_IMPLEMENTATION before including this file
 
-// It is a classic implementation of dynamic arrays in C
+// It is a classic implementation of dynamic arrays and hash tables in C
 // Be carefull, this implementation uses a lot of macros, and therefore,
 // is not entirely type safe
 
@@ -135,8 +135,8 @@
 
 #endif // CDATA_NO_STDLIB
 
-#ifndef __attribute__
-#define __attribute__(...)
+#if !defined(__GNUC__) && !defined(__attribute__)
+#define __attribute__(a)
 #endif
 
 #if defined(__GNUC__) || defined(__clang__)
@@ -157,8 +157,11 @@
 #define CLEAR_BIT(value,bit)        ((value) &= (~(1L << (bit))))
 #define TOOGLE_BIT(value,bit)       ((value) ^  (1L << (bit)))
 
-// Little hack to generate compile-time errors in C
-#define ERROR(msg)                  typedef char error_##msg[-1]
+#ifdef __cplusplus
+#define ERROR(msg)                  static_assert(0, (msg))
+#else
+#define ERROR(msg)                  _Static_assert(0, (msg))
+#endif
 
 // This function type is used for comparing elements in both sorting and search functions.
 // It should return an integer less than zero if the first argument is considered smaller,
@@ -197,7 +200,7 @@ typedef size_t (*Hash_Fcn)(const void *);
 #ifdef CDATA_TYPEOF_SUPPORTED
 #define array_for_each(array,it)                for (__typeof__(array) (it) = (array); (it) <= &array_last(array); (it)++)
 #else
-#define array_for_each(...)                     ERROR(array_for_each_not_supported_for_this_compiler);
+#define array_for_each(array,it)                ERROR("array_for_each is not supported for this compiler!")
 #endif
 
 // Remove element at the end of the array
@@ -253,7 +256,7 @@ typedef size_t (*Hash_Fcn)(const void *);
     _array_binary_search((array), sizeof(*(array)), (key), (compare))
 
 #if defined(CDATA_NO_STDLIB) && !defined(CDATA_QSORT)
-#define array_qsort(...)    ERROR(CDATA_QSORT_was_not_defined)
+#define array_qsort(array,compare)      ERROR("CDATA_QSORT was not defined!")
 #else
 #define array_qsort(array,compare) \
     CDATA_QSORT((array), array_size(array), sizeof(*array), (compare))
@@ -328,7 +331,8 @@ typedef size_t (*Hash_Fcn)(const void *);
         for (__typeof__(hash_table) (it) = hash_table_address_at(hash_table,index); \
             keep && hash_table_is_occupied((hash_table),(index)); keep = 0)
 #else
-#define hash_table_for_each(...)    ERROR(hash_table_for_each_not_supported_for_this_compiler);
+#define hash_table_for_each(hash_table,index,it) \
+    ERROR("hash_table_for_each is not supported for this compiler")
 #endif
 
 #define hash_table_to_array(hash_table) (_hash_table_to_array((hash_table), sizeof(*(hash_table))))
