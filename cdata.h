@@ -74,6 +74,13 @@
 #error "The load factor (LOAD_FACTOR_NUMERATOR/LOAD_FACTOR_DENOMINATOR) should be lower than one!"
 #endif
 
+// TODO: Add arena allocator to this library
+
+// The default is quadratic probing
+#if !defined(QUADRATIC_PROBING) && !defined(LINEAR_PROBING)
+#define QUADRATIC_PROBING
+#endif
+
 // Custom function modifier
 #ifndef CDATA_FCN_DEF
 #define CDATA_FCN_DEF
@@ -137,6 +144,8 @@
 
 #if !defined(__GNUC__) && !defined(__attribute__)
 #define __attribute__(a)
+#define warn_unused_result
+#define nonnull
 #endif
 
 #if defined(__GNUC__) || defined(__clang__)
@@ -146,8 +155,8 @@
 //------------------------------------------------------------------------------
 // General Definitions
 
-// Useful macro to be used with static arrays
-#define STATIC_ARRAY_LEN(array)     (sizeof(array)/sizeof(array[0]))
+// Useful macro to get the size of static arrays
+#define STATIC_ARRAY_SIZE(array)    (sizeof(array)/sizeof(array[0]))
 
 #define INT_DIV_ROUND_UP(num,den)   (((num) + (den) - 1)/(den))
 #define INT_MIN(a,b)                ((a)<(b)?(a):(b))
@@ -347,25 +356,28 @@ extern "C" {
 #endif
 
 // This functions shouldn't be called directly, insted use the macros defined above
+CDATA_FCN_DEF size_t round_up_2(size_t value)
+    __attribute__((warn_unused_result));
 CDATA_FCN_DEF void *_cdata_new(size_t element_size, size_t header_size, size_t initial_capacity)
     __attribute__((warn_unused_result));
 CDATA_FCN_DEF void *_array_resize(void *array, size_t element_size, size_t new_capacity)
-    __attribute__((warn_unused_result));
+    __attribute__((warn_unused_result, nonnull));
 CDATA_FCN_DEF size_t _array_sequential_search(const void *array, size_t element_size, const void *key, Compare_Fcn compare)
-    __attribute__((warn_unused_result));
+    __attribute__((warn_unused_result, nonnull));
 CDATA_FCN_DEF size_t _array_binary_search(const void *array, size_t element_size, const void *key, Compare_Fcn compare)
-    __attribute__((warn_unused_result));
+    __attribute__((warn_unused_result, nonnull));
 CDATA_FCN_DEF void *_hash_table_new(size_t element_size, Hash_Fcn hash_function, Compare_Fcn compare_key, size_t initial_capacity)
     __attribute__((warn_unused_result));
 CDATA_FCN_DEF size_t _hash_table_get_index(void *hash_table, size_t element_size, const void *key)
-    __attribute__((warn_unused_result));
+    __attribute__((warn_unused_result, nonnull));
 CDATA_FCN_DEF void *_hash_table_get(void *hash_table, size_t element_size, const void *key)
-    __attribute__((warn_unused_result));
+    __attribute__((warn_unused_result, nonnull));
 CDATA_FCN_DEF void *_hash_table_resize(void *hash_table, size_t element_size)
-    __attribute__((warn_unused_result));
-CDATA_FCN_DEF int _hash_table_insert(void **hash_table, size_t element_size, const void *value, void **const user_address);
+    __attribute__((warn_unused_result, nonnull));
+CDATA_FCN_DEF int _hash_table_insert(void **hash_table, size_t element_size, const void *value, void **const user_address)
+    __attribute__((nonnull(1,3)));
 CDATA_FCN_DEF void *_hash_table_to_array(const void *hash_table, size_t element_size)
-    __attribute__((warn_unused_result));
+    __attribute__((warn_unused_result, nonnull));
 
 #ifdef __cplusplus
 }
@@ -383,7 +395,21 @@ CDATA_FCN_DEF void *_hash_table_to_array(const void *hash_table, size_t element_
 extern "C" {
 #endif
 
+// Function stolen from https://handwiki.org/wiki/Quadratic_probing
+CDATA_FCN_DEF size_t round_up_2(size_t value) {
+	value--;
+	value |= value >> 1;
+	value |= value >> 2;
+	value |= value >> 4;
+	value |= value >> 8;
+	value |= value >> 16;
+	value |= value >> 32;
+	value++;
+	return value;
+}
+
 CDATA_FCN_DEF void *_cdata_new(size_t element_size, size_t header_size, size_t initial_capacity) {
+    initial_capacity = round_up_2(initial_capacity);
     void *p = CDATA_REALLOC(NULL, initial_capacity * element_size + header_size);
     if (p == NULL) {
         return(NULL);
@@ -398,6 +424,7 @@ CDATA_FCN_DEF void *_cdata_new(size_t element_size, size_t header_size, size_t i
 CDATA_FCN_DEF void *_array_resize(void *array, size_t element_size, size_t new_capacity) {
     const size_t header_size = ARRAY_HEADER_SIZE;
     void *p = ((char *)array - header_size);
+    new_capacity = round_up_2(new_capacity);
     void *new_p = CDATA_REALLOC(p, new_capacity * element_size + header_size);
     if (new_p == NULL) {
         CDATA_FREE(p);
@@ -514,7 +541,11 @@ CDATA_FCN_DEF size_t _hash_table_get_index(void *hash_table, size_t element_size
         if (hash_table_compare_keys(hash_table, it, key) == 0) {
             break;
         }
+#ifdef QUADRATIC_PROBING
+        index = (index + i*i) % hash_table_capacity(hash_table);
+#else // LINEAR_PROBING
         index = (index + 1) % hash_table_capacity(hash_table);
+#endif
     }
     if (i >= hash_table_capacity(hash_table)) {
         // The table is full and the key wasn't found

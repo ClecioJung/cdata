@@ -214,7 +214,7 @@ int process_file(const char *const filename, const Algorithm algorithm, int prin
     }
     int result = EXIT_SUCCESS;
     if (!feof(file)) {
-        fprintf(stderr, "Error: Didn't reach the end of file for file \"%s\"\n", filename);
+        fprintf(stderr, "Error: Didn't reach the end of file \"%s\"\n", filename);
         result = EXIT_FAILURE;
     }
     data = algorithm.post_process(data);
@@ -246,7 +246,7 @@ int parse_uint(const char *const str, size_t *const number) {
 }
 
 size_t algorithm_option(char arg) {
-    for (size_t i = 0; i < STATIC_ARRAY_LEN(algorithms); i++) {
+    for (size_t i = 0; i < STATIC_ARRAY_SIZE(algorithms); i++) {
         if (arg == algorithms[i].arg_option) {
             return i;
         }
@@ -257,7 +257,7 @@ size_t algorithm_option(char arg) {
 void usage(FILE *const stream, const char *const  program_name) {
     fprintf(stream, "Usage: %s [options] file...\n", program_name);
     fprintf(stream, "Options:\n");
-    for (size_t i = 0; i < STATIC_ARRAY_LEN(algorithms); i++) {
+    for (size_t i = 0; i < STATIC_ARRAY_SIZE(algorithms); i++) {
         const Algorithm algorithm = algorithms[i];
         fprintf(stream, "  -%c                       %s\n", algorithm.arg_option, algorithm.help_msg);
     }
@@ -292,7 +292,7 @@ int main(const int argc, const char *const argv[])
         }
         // Check if it was an algorithm option
         size_t found_algorithm = algorithm_option(arg[1]);
-        if (found_algorithm < STATIC_ARRAY_LEN(algorithms)) {
+        if (found_algorithm < STATIC_ARRAY_SIZE(algorithms)) {
             SET_BIT(active_algorithms, found_algorithm);
             continue;
         }
@@ -332,7 +332,7 @@ int main(const int argc, const char *const argv[])
     for (size_t i = 0; i < array_size(filenames); i++) {
         int print_header = 1;
         const char *const filename = filenames[i];
-        for (size_t j = 0; j < STATIC_ARRAY_LEN(algorithms); j++) {
+        for (size_t j = 0; j < STATIC_ARRAY_SIZE(algorithms); j++) {
             if (!TEST_BIT(active_algorithms, j)) {
                 continue;
             }
