@@ -132,7 +132,7 @@ int main(void)
   entry = (Entry){ .key = "alpha" };
   Entry *found = hash_table_get(hash_table, &entry);
   if (found != NULL) {
-    printf("The key = \"%s\" has vlaue = \"%s\"\n", found->key, found->value);
+    printf("The key = \"%s\" has value = \"%s\"\n", found->key, found->value);
   } else {
     printf("The key = \"%s\" was NOT found in the hash table\n", entry.key);
   }

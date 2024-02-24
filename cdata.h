@@ -401,15 +401,15 @@ extern "C" {
 
 // Function stolen from https://handwiki.org/wiki/Quadratic_probing
 CDATA_FCN_DEF size_t round_up_2(size_t value) {
-	value--;
-	value |= value >> 1;
-	value |= value >> 2;
-	value |= value >> 4;
-	value |= value >> 8;
-	value |= value >> 16;
-	value |= value >> 32;
-	value++;
-	return value;
+    value--;
+    value |= value >> 1;
+    value |= value >> 2;
+    value |= value >> 4;
+    value |= value >> 8;
+    value |= value >> 16;
+    value |= value >> 32;
+    value++;
+    return value;
 }
 
 CDATA_FCN_DEF void *_cdata_new(size_t element_size, size_t header_size, size_t initial_capacity) {
