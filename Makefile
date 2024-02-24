@@ -8,7 +8,7 @@ EXEC          = examples/count-words
 all: $(EXEC)
 
 $(EXEC): $(EXEC).c cdata.h Makefile
-	$(CC) $(CFLAGS) $(FLAGS) $(filter %.c %.o %.s,$^) -o $@
+	$(CC) $(CFLAGS) $(filter %.c %.o %.s,$^) -o $@
 
 clean:
 	rm -rf $(EXEC) *.o *.d

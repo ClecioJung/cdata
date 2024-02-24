@@ -284,7 +284,7 @@ typedef size_t (*Hash_Fcn)(const void *);
     ((void *)((size_t)(array) + (index)*(element_size)))
 
 //------------------------------------------------------------------------------
-// Hash Table using open adressing and linear probing
+// Hash Table using open adressing (with linear or quadratic probing)
 
 #define hash_table_capacity(hash_table)             array_capacity(hash_table)
 #define hash_table_size(hash_table)                 array_size(hash_table)
@@ -365,6 +365,10 @@ CDATA_FCN_DEF void *_array_resize(void *array, size_t element_size, size_t new_c
 CDATA_FCN_DEF size_t _array_sequential_search(const void *array, size_t element_size, const void *key, Compare_Fcn compare)
     __attribute__((warn_unused_result, nonnull));
 CDATA_FCN_DEF size_t _array_binary_search(const void *array, size_t element_size, const void *key, Compare_Fcn compare)
+    __attribute__((warn_unused_result, nonnull));
+CDATA_FCN_DEF int _array_insert_sorted(void **array, size_t element_size, const void *element, Compare_Fcn compare, size_t *const user_index)
+    __attribute__((nonnull(1,3)));
+CDATA_FCN_DEF size_t djb2(const char *str)
     __attribute__((warn_unused_result, nonnull));
 CDATA_FCN_DEF void *_hash_table_new(size_t element_size, Hash_Fcn hash_function, Compare_Fcn compare_key, size_t initial_capacity)
     __attribute__((warn_unused_result));
@@ -516,6 +520,15 @@ CDATA_FCN_DEF int _array_insert_sorted(void **array, size_t element_size, const 
         *user_index = index;
     }
     return(1);
+}
+
+CDATA_FCN_DEF size_t djb2(const char *str) {
+    size_t hash = 5381;
+    for (; *str; ++str) {
+        /* hash * 33 + c */
+        hash = ((hash << 5) + hash) + (size_t)*str;
+    }
+    return hash;
 }
 
 CDATA_FCN_DEF void *_hash_table_new(size_t element_size, Hash_Fcn hash_function, Compare_Fcn compare_key, size_t initial_capacity) {

@@ -56,15 +56,6 @@ Word *convert_hash_table_to_sorted_array(Word *hash_table) {
     return array_sort_words_descending_by_count(array);
 }
 
-size_t djb2(const char *str) {
-    size_t hash = 5381;
-    for (; *str; ++str) {
-        /* hash * 33 + c */
-        hash = ((hash << 5) + hash) + (size_t)*str;
-    }
-    return hash;
-}
-
 size_t word_hash(const void *data) {
     const Word *word = data;
     size_t value = djb2(word->word);
