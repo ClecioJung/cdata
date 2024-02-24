@@ -150,6 +150,8 @@
 #define STATIC_ARRAY_LEN(array)     (sizeof(array)/sizeof(array[0]))
 
 #define INT_DIV_ROUND_UP(num,den)   (((num) + (den) - 1)/(den))
+#define INT_MIN(a,b)                ((a)<(b)?(a):(b))
+#define INT_MAX(a,b)                ((a)>(b)?(a):(b))
 
 // Bit operations
 #define TEST_BIT(value,bit)         ((value) &  (1L << (bit)))

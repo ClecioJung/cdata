@@ -19,7 +19,7 @@ typedef struct {
 typedef Word *(*Init_Fcn)(void);
 typedef Word *(*Process_Word_Fcn)(Word *, const Word);
 typedef Word *(*Post_Process_Fcn)(Word *const);
-typedef void (*Display_Results_Fcn)(Word *const);
+typedef void (*Display_Results_Fcn)(Word *const, size_t);
 typedef void (*Deinit_Fcn)(Word *);
 
 typedef struct {
@@ -30,9 +30,6 @@ typedef struct {
     Display_Results_Fcn display_results;
     Deinit_Fcn deinit;
 } Algorithm;
-
-#define MIN(a,b) ((a)<(b)?(a):(b))
-#define MAX(a,b) ((a)>(b)?(a):(b))
 
 int compare_words(const void *a, const void *b) {
     Word *word_a = (Word *)a;
@@ -89,9 +86,9 @@ void array_deinit(Word *array) {
     array_delete(array);
 }
 
-void array_display_results(Word *const array) {
+void array_display_results(Word *const array, size_t number_of_words) {
     printf("  unique words: %zu\n", array_size(array));
-    const size_t number_of_words = MIN(10, array_size(array));
+    number_of_words = INT_MIN(number_of_words, array_size(array));
     if (number_of_words > 0) {
         printf("  top %zu words:\n", number_of_words);
         for (size_t i = 0; i < number_of_words; i++) {
@@ -167,7 +164,7 @@ static const Algorithm algorithms[] = {
     },
 };
 
-int process_file(const char *const filename, const Algorithm algorithm) {
+int process_file(const char *const filename, const Algorithm algorithm, size_t number_of_words) {
     clock_t tic = clock();
     FILE *const file = fopen(filename, "rb");
     if (file == NULL) {
@@ -216,7 +213,7 @@ int process_file(const char *const filename, const Algorithm algorithm) {
         printf("  lines: %zu\n", lines);
         printf("  chars: %zu\n", chars);
         printf("  words: %zu\n", words);
-        algorithm.display_results(data);
+        algorithm.display_results(data, number_of_words);
     }
     algorithm.deinit(data);
     fclose(file);
@@ -236,10 +233,11 @@ int main(const int argc, const char *const argv[])
         return EXIT_FAILURE;
     }
     // TODO: Add command line arguments to select which algorithm to use
+    // TODO: Add command line argument to select how many words to print
     for (int i = 1; i < argc; i++) {
         const char *const filename = argv[i];
         for (size_t j = 0; j < STATIC_ARRAY_LEN(algorithms); j++) {
-            if (process_file(filename, algorithms[j])) {
+            if (process_file(filename, algorithms[j], 10)) {
                 return EXIT_FAILURE;
             }
         }

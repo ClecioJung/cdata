@@ -1,36 +1,16 @@
 CC            = gcc
 CFLAGS        = -pedantic -W -Wall -Wextra \
                 -Wconversion -Wswitch-enum \
-                -Werror -std=c99
-DEBUG_FLAGS   = -O0 -g -DDEBUG
-RELEASE_FLAGS = -O2 -flto
-EXEC          = count
+                -Werror -std=c99 -O0 -g -I.
 
-RELEASE_DIR   = Release
-RELEASE_EXEC  = $(RELEASE_DIR)/$(EXEC)
-RELEASE_OBJS  = $(addprefix $(RELEASE_DIR)/, $(OBJS))
-RELEASE_DEPS  = $(addprefix $(RELEASE_DIR)/, $(DEPS))
-DEBUG_DIR     = Debug
-DEBUG_EXEC    = $(DEBUG_DIR)/$(EXEC)
-DEBUG_OBJS    = $(addprefix $(DEBUG_DIR)/, $(OBJS))
-DEBUG_DEPS    = $(addprefix $(DEBUG_DIR)/, $(DEPS))
+EXEC          = examples/count-words
 
-all: release
+all: $(EXEC)
 
-release: $(RELEASE_EXEC)
-
-debug: $(DEBUG_EXEC)
-
-$(RELEASE_EXEC): main.c cdata.h Makefile | $(RELEASE_DIR)
-	$(CC) $(CFLAGS) $(RELEASE_FLAGS) $(filter %.c %.o %.s,$^) -o $@
-
-$(DEBUG_EXEC): main.c cdata.h Makefile | $(DEBUG_DIR)
-	$(CC) $(CFLAGS) $(DEBUG_FLAGS) $(filter %.c %.o %.s,$^) -o $@
-
-$(RELEASE_DIR) $(DEBUG_DIR):
-	mkdir $@
+$(EXEC): $(EXEC).c cdata.h Makefile
+	$(CC) $(CFLAGS) $(FLAGS) $(filter %.c %.o %.s,$^) -o $@
 
 clean:
-	rm -rf $(RELEASE_DIR) $(DEBUG_DIR) *.o *.d
+	rm -rf $(EXEC) *.o *.d
 
-.PHONY: all clean release debug
+.PHONY: all clean
