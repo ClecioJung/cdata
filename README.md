@@ -8,8 +8,14 @@
 - It is a [Header Only Library](https://github.com/nothings/stb);
 - It was tested only on Linux (compatible with GNU GCC or clang);
 - It is highly customizable;
+- Features:
+  - [Dynamic arrays](#Dynamic-arrays)
+  - [Hash tables](#Hash-tables)
+  - [Arena allocator](#Arena-allocator)
 
 ## Usage
+
+### Dynamic arrays
 
 Example of usage of dynamic arrays:
 
@@ -76,6 +82,8 @@ int main(void)
   return 0;
 }
 ```
+
+### Hash tables
 
 Example of usage of hash tables (it uses open adressing with linear or quadratic probing):
 
@@ -146,6 +154,44 @@ int main(void)
 
   // Deallocates the hash table
   hash_table_delete(hash_table);
+  return 0;
+}
+```
+
+### Arena allocator
+
+Example of usage of the arena allocator:
+
+```c
+#include <stdio.h>
+
+#define CDATA_IMPLEMENTATION
+#include "cdata.h"
+
+static const char name[] = "arena allocator";
+
+int main(void)
+{
+  Arena arena = { 0 };
+
+  // Allocates an integer
+  int *ptr = arena_alloc(&arena, sizeof(int));
+  *ptr = 69;
+  printf("ptr = %d\n", *ptr);
+
+  // Duplicates a string
+  char *str = arena_strdup(&arena, name);
+  printf("This is a string allocated by the %s\n", str);
+
+  // Frees all the allocated memory at once
+  arena_free_all(&arena);
+
+  // Duplicates a sized string
+  str = arena_strndup(&arena, name, 5);
+  printf("This is goodbye from the %s\n", str);
+
+  // Deallocates the arena
+  arena_delete(&arena);
   return 0;
 }
 ```

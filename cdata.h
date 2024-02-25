@@ -27,7 +27,7 @@
 #ifndef CDATA_NO_STDLIB
 #include <stddef.h> // size_t
 #include <stdlib.h> // realloc, free, qsort
-#include <string.h> // memset, memmove, memcpy
+#include <string.h> // memset, memmove, memcpy, strlen
 #endif // CDATA_NO_STDLIB
 
 #ifndef __CDATA_HEADER_ONLY_LIBRARY
@@ -74,11 +74,13 @@
 #error "The load factor (LOAD_FACTOR_NUMERATOR/LOAD_FACTOR_DENOMINATOR) should be lower than one!"
 #endif
 
-// TODO: Add arena allocator to this library
-
 // The default is quadratic probing
 #if !defined(QUADRATIC_PROBING) && !defined(LINEAR_PROBING)
 #define QUADRATIC_PROBING
+#endif
+
+#ifndef ARENA_DEFAULT_REGION_CAPACITY
+#define ARENA_DEFAULT_REGION_CAPACITY       4096
 #endif
 
 // Custom function modifier
@@ -120,6 +122,9 @@
 #ifndef CDATA_MEMCPY
 #define CDATA_MEMCPY(dst,src,size)  memcpy((dst),(src),(size))
 #endif
+#ifndef CDATA_STRLEN
+#define CDATA_STRLEN(str)           strlen((str))
+#endif
 
 #else // CDATA_NO_STDLIB
 
@@ -138,6 +143,9 @@
 #endif
 #ifndef CDATA_MEMCPY
 #error "CDATA_MEMCPY must be defined if CDATA_NO_STDLIB is used!"
+#endif
+#ifndef CDATA_STRLEN
+#error "CDATA_STRLEN must be defined if CDATA_NO_STDLIB is used!"
 #endif
 
 #endif // CDATA_NO_STDLIB
@@ -159,6 +167,7 @@
 #define STATIC_ARRAY_SIZE(array)    (sizeof(array)/sizeof(array[0]))
 
 #define INT_DIV_ROUND_UP(num,den)   (((num) + (den) - 1)/(den))
+#define INT_ROUND_UP(value,unit)    (INT_DIV_ROUND_UP((value),(unit))*(unit))
 #define INT_MIN(a,b)                ((a)<(b)?(a):(b))
 #define INT_MAX(a,b)                ((a)>(b)?(a):(b))
 
@@ -283,6 +292,28 @@ typedef size_t (*Hash_Fcn)(const void *);
 #define array_compute_address_at(array,element_size,index) \
     ((void *)((size_t)(array) + (index)*(element_size)))
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// This functions shouldn't be called directly, insted use the macros defined above
+CDATA_FCN_DEF size_t round_up_2(size_t value)
+    __attribute__((warn_unused_result));
+CDATA_FCN_DEF void *_cdata_new(size_t element_size, size_t header_size, size_t initial_capacity)
+    __attribute__((warn_unused_result));
+CDATA_FCN_DEF void *_array_resize(void *array, size_t element_size, size_t new_capacity)
+    __attribute__((warn_unused_result, nonnull));
+CDATA_FCN_DEF size_t _array_sequential_search(const void *array, size_t element_size, const void *key, Compare_Fcn compare)
+    __attribute__((warn_unused_result, nonnull));
+CDATA_FCN_DEF size_t _array_binary_search(const void *array, size_t element_size, const void *key, Compare_Fcn compare)
+    __attribute__((warn_unused_result, nonnull));
+CDATA_FCN_DEF int _array_insert_sorted(void **array, size_t element_size, const void *element, Compare_Fcn compare, size_t *const user_index)
+    __attribute__((nonnull(1,3)));
+
+#ifdef __cplusplus
+}
+#endif
+
 //------------------------------------------------------------------------------
 // Hash Table using open adressing (with linear or quadratic probing)
 
@@ -348,26 +379,11 @@ typedef size_t (*Hash_Fcn)(const void *);
 
 #define hash_table_to_array(hash_table) (_hash_table_to_array((hash_table), sizeof(*(hash_table))))
 
-//------------------------------------------------------------------------------
-// Function prototypes
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 // This functions shouldn't be called directly, insted use the macros defined above
-CDATA_FCN_DEF size_t round_up_2(size_t value)
-    __attribute__((warn_unused_result));
-CDATA_FCN_DEF void *_cdata_new(size_t element_size, size_t header_size, size_t initial_capacity)
-    __attribute__((warn_unused_result));
-CDATA_FCN_DEF void *_array_resize(void *array, size_t element_size, size_t new_capacity)
-    __attribute__((warn_unused_result, nonnull));
-CDATA_FCN_DEF size_t _array_sequential_search(const void *array, size_t element_size, const void *key, Compare_Fcn compare)
-    __attribute__((warn_unused_result, nonnull));
-CDATA_FCN_DEF size_t _array_binary_search(const void *array, size_t element_size, const void *key, Compare_Fcn compare)
-    __attribute__((warn_unused_result, nonnull));
-CDATA_FCN_DEF int _array_insert_sorted(void **array, size_t element_size, const void *element, Compare_Fcn compare, size_t *const user_index)
-    __attribute__((nonnull(1,3)));
 CDATA_FCN_DEF size_t djb2(const char *str)
     __attribute__((warn_unused_result, nonnull));
 CDATA_FCN_DEF void *_hash_table_new(size_t element_size, Hash_Fcn hash_function, Compare_Fcn compare_key, size_t initial_capacity)
@@ -382,6 +398,39 @@ CDATA_FCN_DEF int _hash_table_insert(void **hash_table, size_t element_size, con
     __attribute__((nonnull(1,3)));
 CDATA_FCN_DEF void *_hash_table_to_array(const void *hash_table, size_t element_size)
     __attribute__((warn_unused_result, nonnull));
+
+#ifdef __cplusplus
+}
+#endif
+
+//------------------------------------------------------------------------------
+// Arena allocator
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+struct _Region;
+typedef struct _Region {
+    size_t capacity;
+    size_t occupied;
+    struct _Region *next;
+    char data[];
+} Region;
+
+typedef struct {
+    Region *first;
+    Region *current;
+} Arena;
+
+CDATA_FCN_DEF void *arena_alloc(Arena *arena, size_t size)
+    __attribute__((warn_unused_result, nonnull));
+CDATA_FCN_DEF char *arena_strdup(Arena *arena, const char *str)
+    __attribute__((warn_unused_result, nonnull));
+CDATA_FCN_DEF char *arena_strndup(Arena *arena, const char *str, size_t len)
+    __attribute__((warn_unused_result, nonnull));
+CDATA_FCN_DEF void arena_delete(Arena *arena)
+    __attribute__((nonnull));
 
 #ifdef __cplusplus
 }
@@ -640,6 +689,74 @@ CDATA_FCN_DEF void *_hash_table_to_array(const void *hash_table, size_t element_
         }
     }
     return(array);
+}
+
+CDATA_FCN_DEF void *arena_alloc(Arena *arena, size_t size) {
+    size = INT_ROUND_UP(size, sizeof(void *));
+    for (Region *current = arena->current; current != NULL; current = current->next) {
+        arena->current = current;
+        size_t available = current->capacity - current->occupied;
+        if (available > size) {
+            void *data = (void *)((size_t)current->data + current->occupied);
+            current->occupied += size;
+            return data;
+        }
+    }
+    size_t capacity = INT_MAX(size, ARENA_DEFAULT_REGION_CAPACITY);
+    Region *new_region = CDATA_REALLOC(NULL, capacity + sizeof(Region));
+    if (new_region == NULL) {
+        return NULL;
+    }
+    new_region->next = NULL;
+    new_region->capacity = capacity;
+    new_region->occupied = size;
+    if (arena->current != NULL) {
+        arena->current->next = new_region;
+    }
+    arena->current = new_region;
+    if (arena->first == NULL) {
+        arena->first = new_region;
+    }
+    return new_region->data;
+}
+
+CDATA_FCN_DEF char *arena_strdup(Arena *arena, const char *str) {
+    size_t len = CDATA_STRLEN(str) + 1;
+    char *dup = arena_alloc(arena, len);
+    if (dup == NULL) {
+        return NULL;
+    }
+    CDATA_MEMCPY(dup, str, len);
+    return dup;
+}
+
+CDATA_FCN_DEF char *arena_strndup(Arena *arena, const char *str, size_t len) {
+    char *dup = arena_alloc(arena, len + 1);
+    if (dup == NULL) {
+        return NULL;
+    }
+    CDATA_MEMCPY(dup, str, len);
+    dup[len] = '\0';
+    return dup;
+}
+
+CDATA_FCN_DEF void arena_free_all(Arena *arena) {
+    arena->current = arena->first;
+    Region *region = arena->first;
+    while (region != NULL) {
+        region->occupied = 0;
+        region = region->next;
+    }
+}
+
+CDATA_FCN_DEF void arena_delete(Arena *arena) {
+    Region *region = arena->first;
+    while (region != NULL) {
+        Region *next = region->next;
+        CDATA_FREE(region);
+        region = next;
+    }
+    CDATA_MEMSET(arena, 0, sizeof(*arena));
 }
 
 #ifdef __cplusplus

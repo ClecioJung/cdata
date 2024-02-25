@@ -1,5 +1,3 @@
-#define _GNU_SOURCE
-
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
@@ -32,6 +30,9 @@ typedef struct {
     Display_Results_Fcn display_results;
     Deinit_Fcn deinit;
 } Algorithm;
+
+// Global arena allocator
+static Arena arena = { 0 };
 
 int compare_words(const void *a, const void *b) {
     Word *word_a = (Word *)a;
@@ -73,9 +74,6 @@ Word *hash_table_init(void) {
 }
 
 void array_deinit(Word *array) {
-    array_for_each(array, it) {
-        free(it->word);
-    }
     array_delete(array);
 }
 
@@ -96,7 +94,7 @@ Word *sequential_algorithm(Word *array, const Word word) {
         array_at(array, index).count++;
     } else {
         Word new_word = {
-            .word = strdup(word.word),
+            .word = arena_strdup(&arena, word.word),
             .count = 1,
         };
         array_push(array, new_word);
@@ -108,7 +106,7 @@ Word *sorted_algorithm(Word *array, const Word word) {
     size_t index = (size_t)-1;
     if (array_insert_sorted(array, &word, compare_words, &index)) {
         array_at(array, index) = (Word) {
-            .word = strdup(word.word),
+            .word = arena_strdup(&arena, word.word),
             .count = 1,
         };
     } else {
@@ -121,7 +119,7 @@ Word *hash_algorithm(Word *hash_table, const Word word) {
     Word *stored = NULL;
     if (hash_table_insert(hash_table, &word, &stored)) {
         *stored = (Word) {
-            .word = strdup(word.word),
+            .word = arena_strdup(&arena, word.word),
             .count = 1,
         };
     } else {
@@ -222,6 +220,7 @@ int process_file(const char *const filename, const Algorithm algorithm, int prin
         algorithm.display_results(data, number_of_words);
     }
     algorithm.deinit(data);
+    arena_free_all(&arena);
     fclose(file);
     return result;
 }
@@ -335,5 +334,6 @@ int main(const int argc, const char *const argv[])
         }
     }
     array_delete(filenames);
+    arena_delete(&arena);
     return EXIT_SUCCESS;
 }
