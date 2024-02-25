@@ -34,9 +34,8 @@ int compare_strings(const void *a, const void *b)
 
 int main(void)
 {
-  // Creates a new array
-  char **array = array_new(char *);
-  assert(array != NULL);
+  // Creates new array of type (char*)
+  char **array = NULL;
   
   // Insert element at the end of the array
   array_push(array, "alpha");
@@ -100,7 +99,7 @@ typedef struct {
   char *value;
 } Entry;
 
-int compare_entries(const void *a, const void *b)
+int compare_entry_name(const void *a, const void *b)
 {
   const Entry *entry_a = a;
   const Entry *entry_b = b;
@@ -115,8 +114,8 @@ size_t hash_entry(const void *data) {
 
 int main(void)
 {
-  // Creates a new hash table
-  Entry *hash_table = hash_table_new(Entry, hash_entry, compare_entries);
+  // Creates a new hash table of type Entry
+  Entry *hash_table = hash_table_new(Entry, hash_entry, compare_entry_name);
   assert(hash_table != NULL);
   
   // Insert element in the hash table
@@ -220,7 +219,7 @@ File: examples/The Divine Comedy.txt
   chars: 220001
   words: 38039
   algorithm: dynamic array
-    execution time: 1.78038s
+    execution time: 1.50013s
     unique words: 7783
     top 10 words:
       01. the               2213
@@ -234,7 +233,7 @@ File: examples/The Divine Comedy.txt
       09. a                  436
       10. with               397
   algorithm: sorted dynamic array
-    execution time: 0.039635s
+    execution time: 0.032461s
     unique words: 7783
     top 10 words:
       01. the               2213
@@ -248,7 +247,7 @@ File: examples/The Divine Comedy.txt
       09. a                  436
       10. with               397
   algorithm: hash table
-    execution time: 0.020831s
+    execution time: 0.018339s
     unique words: 7783
     top 10 words:
       01. the               2213
@@ -266,7 +265,7 @@ File: examples/Shakespeare.txt
   chars: 5458198
   words: 900987
   algorithm: dynamic array
-    execution time: 188.265s
+    execution time: 181.92s
     unique words: 58580
     top 10 words:
       01. the              27627
@@ -280,7 +279,7 @@ File: examples/Shakespeare.txt
       09. you              10642
       10. that             10498
   algorithm: sorted dynamic array
-    execution time: 1.30934s
+    execution time: 1.26882s
     unique words: 58580
     top 10 words:
       01. the              27627
@@ -294,7 +293,7 @@ File: examples/Shakespeare.txt
       09. you              10642
       10. that             10498
   algorithm: hash table
-    execution time: 0.462562s
+    execution time: 0.416467s
     unique words: 58580
     top 10 words:
       01. the              27627

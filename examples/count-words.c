@@ -64,8 +64,7 @@ size_t word_hash(const void *data) {
 }
 
 Word *array_init(void) {
-    Word *array = array_new(Word);
-    return array;
+    return NULL;
 }
 
 Word *hash_table_init(void) {
@@ -265,8 +264,7 @@ int main(const int argc, const char *const argv[])
         return EXIT_FAILURE;
     }
     int active_algorithms = 0 ;
-    char **filenames = array_new(char *);
-    assert(filenames != NULL);
+    char **filenames = NULL;
     size_t number_of_words = 10;
     // First, process all arguments, and append all filenames to a list, for later processing
     for (int i = 1; i < argc; i++) {
@@ -313,20 +311,19 @@ int main(const int argc, const char *const argv[])
     if (active_algorithms == 0) {
         active_algorithms = 0xFF;
     }
-    if (array_size(filenames) == 0) {
+    if (array_is_empty(filenames)) {
         fprintf(stderr, "Error: No file was specified...\n");
         usage(stderr, program_name);
         return EXIT_FAILURE;
     }
     // Process each file using the specified algorithms
-    for (size_t i = 0; i < array_size(filenames); i++) {
+    array_for_each(filenames, filename) {
         int print_header = 1;
-        const char *const filename = filenames[i];
         for (size_t j = 0; j < STATIC_ARRAY_SIZE(algorithms); j++) {
             if (!TEST_BIT(active_algorithms, j)) {
                 continue;
             }
-            if (process_file(filename, algorithms[j], print_header, number_of_words)) {
+            if (process_file(*filename, algorithms[j], print_header, number_of_words)) {
                 // The error was already reported in process_file
                 return EXIT_FAILURE;
             }

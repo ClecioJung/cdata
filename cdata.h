@@ -50,11 +50,18 @@
 #error "The GROWTH_FACTOR should be greater than one!"
 #endif
 
-#ifndef DEFAULT_CAPACITY
-#define DEFAULT_CAPACITY            (512)
+#ifndef ARRAY_DEFAULT_CAPACITY
+#define ARRAY_DEFAULT_CAPACITY            (512)
 #endif
-#if (DEFAULT_CAPACITY <= 1)
-#error "The DEFAULT_CAPACITY should be greater than one!"
+#if (ARRAY_DEFAULT_CAPACITY <= 1)
+#error "The ARRAY_DEFAULT_CAPACITY should be greater than one!"
+#endif
+
+#ifndef HASH_TABLE_DEFAULT_CAPACITY
+#define HASH_TABLE_DEFAULT_CAPACITY            (512)
+#endif
+#if (HASH_TABLE_DEFAULT_CAPACITY <= 1)
+#error "The HASH_TABLE_DEFAULT_CAPACITY should be greater than one!"
 #endif
 
 // Load factor for hash tables
@@ -189,36 +196,37 @@
 // than the second.
 typedef int (*Compare_Fcn)(const void *, const void *);
 
-// Hash functions
-typedef size_t (*Hash_Fcn)(const void *);
-
 //------------------------------------------------------------------------------
 // Dynamic array
 
-#define ARRAY_HEADER_SIZE           (2*sizeof(size_t))
+#define ARRAY_HEADER_SIZE                       (2*sizeof(size_t))
 
-#define array_size(array)           ((size_t *)(array))[-1]
-#define array_capacity(array)       ((size_t *)(array))[-2]
+#define array_size(array)                       ((size_t *)(array))[-1]
+#define array_capacity(array)                   ((size_t *)(array))[-2]
 
-#define array_new_with_capacity(type,initial_capacity) \
-    (type *)_cdata_new(sizeof(type), ARRAY_HEADER_SIZE, (initial_capacity))
-#define array_resize(array,new_capacity) \
-    _array_resize((array), sizeof(*(array)), (new_capacity))
+#define array_clear(array) \
+    do { \
+        if ((array) != NULL) { \
+            array_size(array) = 0; \
+        } \
+    } while (0)
+#define array_delete(array) \
+    do { \
+        if ((array) != NULL) { \
+            CDATA_FREE((void *)((char *)(array) - ARRAY_HEADER_SIZE)); \
+        } \
+    } while (0)
 
-#define array_new(type)     array_new_with_capacity(type, DEFAULT_CAPACITY)
-#define array_clear(array)  (array_size(array) = 0)
-#define array_delete(array) (CDATA_FREE((void *)((char *)(array) - ARRAY_HEADER_SIZE)))
-
-#define array_index_is_valid(array,index)       ((index) < array_size(array))
-#define array_index_is_invalid(array,index)     ((index) >= array_size(array))
-#define array_is_empty(array)                   (array_size(array) == 0)
-#define array_is_not_empty(array)               (array_size(array) > 0)
+#define array_index_is_valid(array,index)       (((array) != NULL) && ((index) < array_size(array)))
+#define array_index_is_invalid(array,index)     (((array) == NULL) || ((index) >= array_size(array)))
+#define array_is_empty(array)                   (((array) == NULL) || (array_size(array) == 0))
+#define array_is_not_empty(array)               (((array) != NULL) && (array_size(array) > 0))
 #define array_at(array,index)                   ((array)[(index)])
 #define array_last(array)                       (array_at((array),(array_size(array) - 1)))
-#define array_for(array,index)                  for (size_t (index) = 0; (index) < array_size(array); (index)++)
+#define array_for(array,index)                  for (size_t (index) = 0; ((array) != NULL) && ((index) < array_size(array)); (index)++)
 
 #ifdef CDATA_TYPEOF_SUPPORTED
-#define array_for_each(array,it)                for (__typeof__(array) (it) = (array); (it) <= &array_last(array); (it)++)
+#define array_for_each(array,it)                for (__typeof__(array) (it) = (array); ((array) != NULL) && ((it) <= &array_last(array)); (it)++)
 #else
 #define array_for_each(array,it)                ERROR("array_for_each is not supported for this compiler!")
 #endif
@@ -228,14 +236,16 @@ typedef size_t (*Hash_Fcn)(const void *);
 
 // Insert element at the end of the array
 #define array_push(array,value) \
-    (((array) = (++array_size(array) >= array_capacity(array)) ? array_resize((array), GROWTH_FACTOR*array_capacity(array)) : (array)), \
+    (((array) = _array_resize_if_needed((array), sizeof(*array), 1)), \
     CDATA_ASSERT((array) != NULL), \
+    array_size(array)++, \
     (array_last(array) = (value)))
 
 #define array_push_raw(array,value,element_size) \
     do { \
-        (array) = (++array_size(array) >= array_capacity(array)) ? _array_resize((array), element_size, GROWTH_FACTOR*array_capacity(array)) : (array); \
+        ((array) = _array_resize_if_needed((array), (element_size), 1)), \
         CDATA_ASSERT((array) != NULL); \
+        array_size(array)++, \
         CDATA_MEMCPY(array_compute_address_at((array), (element_size), array_size(array)-1), (value), element_size); \
     } while (0)
 
@@ -250,8 +260,9 @@ typedef size_t (*Hash_Fcn)(const void *);
 
 // Insert element in the beginning of the array
 #define array_unshift(array, value) \
-    (((array) = (++array_size(array) >= array_capacity(array)) ? array_resize((array), GROWTH_FACTOR*array_capacity(array)) : (array)), \
+    (((array) = _array_resize_if_needed((array), (sizeof(*array)), 1)), \
     CDATA_ASSERT((array) != NULL), \
+    array_size(array)++, \
     CDATA_MEMMOVE(&array_at((array) ,1), (array), (array_size(array) - 1)*sizeof(*(array))), \
     array_at(array, 0) = (value))
 
@@ -299,14 +310,14 @@ extern "C" {
 // This functions shouldn't be called directly, insted use the macros defined above
 CDATA_FCN_DEF size_t round_up_2(size_t value)
     __attribute__((warn_unused_result));
-CDATA_FCN_DEF void *_cdata_new(size_t element_size, size_t header_size, size_t initial_capacity)
+CDATA_FCN_DEF void *_array_resize(void *array, size_t element_size, size_t header_size, size_t new_capacity)
     __attribute__((warn_unused_result));
-CDATA_FCN_DEF void *_array_resize(void *array, size_t element_size, size_t new_capacity)
-    __attribute__((warn_unused_result, nonnull));
+CDATA_FCN_DEF void *_array_resize_if_needed(void *array, size_t element_size, size_t size_to_add)
+    __attribute__((warn_unused_result));
 CDATA_FCN_DEF size_t _array_sequential_search(const void *array, size_t element_size, const void *key, Compare_Fcn compare)
-    __attribute__((warn_unused_result, nonnull));
+    __attribute__((warn_unused_result, nonnull(3,4)));
 CDATA_FCN_DEF size_t _array_binary_search(const void *array, size_t element_size, const void *key, Compare_Fcn compare)
-    __attribute__((warn_unused_result, nonnull));
+    __attribute__((warn_unused_result, nonnull(3,4)));
 CDATA_FCN_DEF int _array_insert_sorted(void **array, size_t element_size, const void *element, Compare_Fcn compare, size_t *const user_index)
     __attribute__((nonnull(1,3)));
 
@@ -338,7 +349,7 @@ CDATA_FCN_DEF int _array_insert_sorted(void **array, size_t element_size, const 
 #define hash_table_new_with_capacity(type,hash_function,compare_key,initial_capacity) \
     (type *)_hash_table_new(sizeof(type), (hash_function), (compare_key), (initial_capacity))
 #define hash_table_new(type,hash_function,compare_key) \
-    hash_table_new_with_capacity(type, (hash_function), (compare_key), DEFAULT_CAPACITY)
+    hash_table_new_with_capacity(type, (hash_function), (compare_key), HASH_TABLE_DEFAULT_CAPACITY)
 #define hash_table_delete(hash_table) \
     (CDATA_FREE((void *)hash_table_occupied_pointer(hash_table)))
 
@@ -383,6 +394,9 @@ CDATA_FCN_DEF int _array_insert_sorted(void **array, size_t element_size, const 
 extern "C" {
 #endif
 
+// Hash functions
+typedef size_t (*Hash_Fcn)(const void *);
+
 // This functions shouldn't be called directly, insted use the macros defined above
 CDATA_FCN_DEF size_t djb2(const char *str)
     __attribute__((warn_unused_result, nonnull));
@@ -392,7 +406,9 @@ CDATA_FCN_DEF size_t _hash_table_get_index(void *hash_table, size_t element_size
     __attribute__((warn_unused_result, nonnull));
 CDATA_FCN_DEF void *_hash_table_get(void *hash_table, size_t element_size, const void *key)
     __attribute__((warn_unused_result, nonnull));
-CDATA_FCN_DEF void *_hash_table_resize(void *hash_table, size_t element_size)
+CDATA_FCN_DEF void *_hash_table_resize(void *hash_table, size_t element_size, size_t new_capacity)
+    __attribute__((warn_unused_result, nonnull));
+CDATA_FCN_DEF void *_hash_table_resize_if_needed(void *hash_table, size_t element_size)
     __attribute__((warn_unused_result, nonnull));
 CDATA_FCN_DEF int _hash_table_insert(void **hash_table, size_t element_size, const void *value, void **const user_address)
     __attribute__((nonnull(1,3)));
@@ -422,6 +438,8 @@ typedef struct {
     Region *first;
     Region *current;
 } Arena;
+
+// TODO: add arena_snapshot, arena_rewind
 
 CDATA_FCN_DEF void *arena_alloc(Arena *arena, size_t size)
     __attribute__((warn_unused_result, nonnull));
@@ -461,27 +479,21 @@ CDATA_FCN_DEF size_t round_up_2(size_t value) {
     return value;
 }
 
-CDATA_FCN_DEF void *_cdata_new(size_t element_size, size_t header_size, size_t initial_capacity) {
-    initial_capacity = round_up_2(initial_capacity);
-    void *p = CDATA_REALLOC(NULL, initial_capacity * element_size + header_size);
-    if (p == NULL) {
-        return(NULL);
-    }
-    CDATA_MEMSET(p, 0, initial_capacity * element_size + header_size);
-    void *array = (char *)p + header_size;
-    array_size(array) = 0;
-    array_capacity(array) = initial_capacity;
-    return(array);
-}
-
-CDATA_FCN_DEF void *_array_resize(void *array, size_t element_size, size_t new_capacity) {
-    const size_t header_size = ARRAY_HEADER_SIZE;
-    void *p = ((char *)array - header_size);
-    new_capacity = round_up_2(new_capacity);
-    void *new_p = CDATA_REALLOC(p, new_capacity * element_size + header_size);
-    if (new_p == NULL) {
-        CDATA_FREE(p);
-        return(NULL);
+CDATA_FCN_DEF void *_array_resize(void *array, size_t element_size, size_t header_size, size_t new_capacity) {
+    void *new_p = NULL;
+    if (array == NULL) {
+        new_p = CDATA_REALLOC(NULL, new_capacity * element_size + header_size);
+        CDATA_MEMSET(new_p, 0, header_size);
+        if (new_p == NULL) {
+            return(NULL);
+        }
+    } else {
+        void *p = (void *)((size_t)array - header_size);
+        new_p = CDATA_REALLOC(p, new_capacity * element_size + header_size);
+        if (new_p == NULL) {
+            CDATA_FREE(p);
+            return(NULL);
+        }
     }
     void *new_array = (char *)new_p + header_size;
     void *address = array_compute_address_at(new_array, element_size, array_capacity(new_array));
@@ -491,34 +503,52 @@ CDATA_FCN_DEF void *_array_resize(void *array, size_t element_size, size_t new_c
     return(new_array);
 }
 
-CDATA_FCN_DEF void *_array_insert_zero_at(void *array, size_t element_size, size_t index) {
-    size_t new_size = array_index_is_valid(array, index) ? (array_size(array)+1) : ((index)+1);
+CDATA_FCN_DEF void *_array_resize_if_needed(void *array, size_t element_size, size_t size_to_add) {
+    if (array == NULL) {
+        size_t new_capacity = INT_MAX(size_to_add, ARRAY_DEFAULT_CAPACITY);
+        new_capacity = round_up_2(new_capacity);
+        array = _array_resize(NULL, element_size, ARRAY_HEADER_SIZE, new_capacity);
+        if (array == NULL) {
+            return NULL;
+        }
+    }
+    size_t new_size = array_size(array) + size_to_add;
     if (new_size >= array_capacity(array)) {
         size_t new_capacity = array_capacity(array);
         while (new_size >= new_capacity) {
             new_capacity *= GROWTH_FACTOR;
         }
-        array = _array_resize(array, element_size, new_capacity);
+        new_capacity = round_up_2(new_capacity);
+        array = _array_resize(array, element_size, ARRAY_HEADER_SIZE, new_capacity);
     }
+    return array;
+}
+
+CDATA_FCN_DEF void *_array_insert_zero_at(void *array, size_t element_size, size_t index) {
+    size_t old_size = (array == NULL) ? 0 : array_size(array);
+    size_t size_to_add = array_index_is_valid(array, index) ? 1 : ((index) + 1 - old_size);
+    array = _array_resize_if_needed(array, element_size, size_to_add);
     if (array != NULL) {
         void *actual = array_compute_address_at(array, element_size, index);
-        if (array_index_is_valid((array), (index))) {
+        if (index < old_size) {
             void *next = array_compute_address_at(array, element_size, (index+1));
-            size_t length = (array_size(array) - ((index)));
+            size_t length = old_size - index;
             CDATA_MEMMOVE(next, actual, length*element_size);
         }
         CDATA_MEMSET(actual, 0, element_size);
-        array_size(array) = new_size;
+        array_size(array) = old_size + size_to_add;
     }
     return(array);
 }
 
 // This function returns an invalid index in case the key wasn't found
 CDATA_FCN_DEF size_t _array_sequential_search(const void *array, size_t element_size, const void *key, Compare_Fcn compare) {
-    for (size_t i = 0; i < array_size(array); i++) {
-        const void *it = array_compute_address_at(array, element_size, i);
-        if (!compare(key, it)) {
-            return(i);
+    if (array != NULL) {
+        for (size_t i = 0; i < array_size(array); i++) {
+            const void *it = array_compute_address_at(array, element_size, i);
+            if (!compare(key, it)) {
+                return(i);
+            }
         }
     }
     return((size_t)-1);
@@ -526,6 +556,9 @@ CDATA_FCN_DEF size_t _array_sequential_search(const void *array, size_t element_
 
 // This function returns an invalid index in case the key wasn't found
 CDATA_FCN_DEF size_t _array_binary_search(const void *array, size_t element_size, const void *key, Compare_Fcn compare) {
+    if (array == NULL) {
+        return((size_t)-1);
+    }
     size_t index;
     size_t low = 0;
     size_t high = array_size(array) - 1;
@@ -550,6 +583,13 @@ CDATA_FCN_DEF size_t _array_binary_search(const void *array, size_t element_size
 
 // This function returns 1 if a new element was inserted, and 0 if that element is already in the array
 CDATA_FCN_DEF int _array_insert_sorted(void **array, size_t element_size, const void *element, Compare_Fcn compare, size_t *const user_index) {
+    if (*array == NULL) {
+        array_push_raw(*array, element, element_size);
+        if (user_index != NULL) {
+            *user_index = 0;
+        }
+        return(1);
+    }
     size_t index = _array_binary_search(*array, element_size, element, compare);
     if (array_index_is_valid(*array, index)) {
         if (user_index != NULL) {
@@ -582,7 +622,7 @@ CDATA_FCN_DEF size_t djb2(const char *str) {
 
 CDATA_FCN_DEF void *_hash_table_new(size_t element_size, Hash_Fcn hash_function, Compare_Fcn compare_key, size_t initial_capacity) {
     size_t header_size = hash_table_header_size_from_capacity(initial_capacity);
-    void *hash_table = _cdata_new(element_size, header_size, initial_capacity);
+    void *hash_table = _array_resize(NULL, element_size, header_size, initial_capacity);
     if (hash_table != NULL) {
         hash_table_hash_function(hash_table) = hash_function;
         hash_table_compare_function(hash_table) = compare_key;
@@ -628,11 +668,11 @@ CDATA_FCN_DEF void *_hash_table_get(void *hash_table, size_t element_size, const
     return(NULL);
 }
 
-CDATA_FCN_DEF void *_hash_table_resize(void *hash_table, size_t element_size) {
+CDATA_FCN_DEF void *_hash_table_resize(void *hash_table, size_t element_size, size_t new_capacity) {
     void *new_hash_table = _hash_table_new(element_size,
         hash_table_hash_function(hash_table),
         hash_table_compare_function(hash_table),
-        GROWTH_FACTOR*hash_table_capacity(hash_table));
+        new_capacity);
     if (new_hash_table == NULL) {
         return(NULL);
     }
@@ -652,13 +692,17 @@ CDATA_FCN_DEF void *_hash_table_resize(void *hash_table, size_t element_size) {
     return(new_hash_table);
 }
 
-CDATA_FCN_DEF int _hash_table_insert(void **hash_table, size_t element_size, const void *value, void **const user_address) {
-    if (hash_table_should_resize(*hash_table)) {
-        *hash_table = _hash_table_resize(*hash_table, element_size);
-        if (*hash_table == NULL) {
-            return(-1);
-        }
+CDATA_FCN_DEF void *_hash_table_resize_if_needed(void *hash_table, size_t element_size) {
+    if (LOAD_FACTOR_DENOMINATOR*hash_table_size(hash_table) >= LOAD_FACTOR_NUMERATOR*hash_table_capacity(hash_table)) {
+        size_t new_capacity = GROWTH_FACTOR*hash_table_capacity(hash_table);
+        new_capacity = round_up_2(new_capacity);
+        hash_table = _hash_table_resize(hash_table, element_size, new_capacity);
     }
+    return(hash_table);
+}
+
+CDATA_FCN_DEF int _hash_table_insert(void **hash_table, size_t element_size, const void *value, void **const user_address) {
+    *hash_table = _hash_table_resize_if_needed(*hash_table, element_size);
     size_t index = _hash_table_get_index(*hash_table, element_size, value);
     void *address = hash_table_compute_address_at(*hash_table, element_size, index);
     if (hash_table_is_occupied(*hash_table, index)) {
@@ -678,7 +722,7 @@ CDATA_FCN_DEF int _hash_table_insert(void **hash_table, size_t element_size, con
 }
 
 CDATA_FCN_DEF void *_hash_table_to_array(const void *hash_table, size_t element_size) {
-    void *array = _cdata_new(element_size, ARRAY_HEADER_SIZE, hash_table_capacity(hash_table));
+    void *array = _array_resize(NULL, element_size, ARRAY_HEADER_SIZE, hash_table_capacity(hash_table));
     if (array == NULL) {
         return(NULL);
     }
